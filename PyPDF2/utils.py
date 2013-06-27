@@ -1,6 +1,6 @@
-# vim: sw=4:expandtab:foldmethod=marker
-#
 # Copyright (c) 2006, Mathieu Fenniak
+# Copyright (c) 2013, Jean Schurger <jean@schurger.org>
+#
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -33,23 +33,12 @@ Utility functions for PDF library.
 __author__ = "Mathieu Fenniak"
 __author_email__ = "biziqe@mathieu.fenniak.net"
 
-#ENABLE_PSYCO = False
-#if ENABLE_PSYCO:
-#    try:
-#        import psyco
-#    except ImportError:
-#        ENABLE_PSYCO = False
-#
-#if not ENABLE_PSYCO:
-#    class psyco:
-#        def proxy(func):
-#            return func
-#        proxy = staticmethod(proxy)
 
-#custom implementation of warnings.formatwarning 
+# custom implementation of warnings.formatwarning
 def _formatwarning(message, category, filename, lineno, line=None):
-    file = filename.replace("/","\\").rsplit("\\",1)[1] # find the file name
+    file = filename.replace("/", "\\").rsplit("\\", 1)[1]  # find the file name
     return "%s: %s [%s:%s]\n" % (category.__name__, message, file, lineno)
+
 
 def readUntilWhitespace(stream, maxchars=None):
     txt = b_("")
@@ -62,19 +51,24 @@ def readUntilWhitespace(stream, maxchars=None):
             break
     return txt
 
+
 def readNonWhitespace(stream):
     tok = b_(' ')
-    while tok == b_('\n') or tok == b_('\r') or tok == b_(' ') or tok == b_('\t'):
+    while tok == b_('\n') or tok == b_('\r') \
+            or tok == b_(' ') or tok == b_('\t'):
         tok = stream.read(1)
     return tok
 
+
 def skipOverWhitespace(stream):
     tok = b_(' ')
-    cnt = 0;
-    while tok == b_('\n') or tok == b_('\r') or tok == b_(' ') or tok == b_('\t'):
+    cnt = 0
+    while tok == b_('\n') or tok == b_('\r') \
+            or tok == b_(' ') or tok == b_('\t'):
         tok = stream.read(1)
-        cnt+=1
+        cnt += 1
     return (cnt > 1)
+
 
 def skipOverComment(stream):
     tok = stream.read(1)
@@ -82,6 +76,7 @@ def skipOverComment(stream):
     if tok == b_('%'):
         while tok not in (b_('\n'), b_('\r')):
             tok = stream.read(1)
+
 
 class ConvertFunctionsToVirtualList(object):
     def __init__(self, lengthFunction, getFunction):
@@ -93,14 +88,15 @@ class ConvertFunctionsToVirtualList(object):
 
     def __getitem__(self, index):
         if not isinstance(index, int):
-            raise TypeError, "sequence indices must be integers"
+            raise TypeError("sequence indices must be integers")
         len_self = len(self)
         if index < 0:
             # support negative indexes
             index = len_self + index
         if index < 0 or index >= len_self:
-            raise IndexError, "sequence index out of range"
+            raise IndexError("sequence index out of range")
         return self.getFunction(index)
+
 
 def RC4_encrypt(key, plaintext):
     S = [i for i in range(256)]
@@ -118,26 +114,30 @@ def RC4_encrypt(key, plaintext):
         retval += b_(chr(ord_(plaintext[x]) ^ t))
     return retval
 
+
 def matrixMultiply(a, b):
-    return [[sum([float(i)*float(j)
-                  for i, j in zip(row, col)]
-                ) for col in zip(*b)]
-            for row in a]
+    return [[sum([float(i) * float(j) for i, j in zip(row, col)])
+             for col in zip(*b)] for row in a]
+
 
 class PyPdfError(Exception):
     pass
 
+
 class PdfReadError(PyPdfError):
     pass
 
+
 class PageSizeNotDefinedError(PyPdfError):
     pass
-    
+
+
 class PdfReadWarning(UserWarning):
     pass
 
+
 def hexStr(num):
-    return hex(num).replace('L','')
+    return hex(num).replace('L', '')
 
 import sys
 if sys.version_info[0] < 3:

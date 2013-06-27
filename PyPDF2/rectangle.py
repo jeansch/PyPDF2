@@ -29,20 +29,37 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-"""
-A pure-Python PDF library with very minimal capabilities.  It was designed to
-be able to split and merge PDF files by page, and that's about all it can do.
-It may be a solid base for future PDF file work in Python.
-"""
-
-__author__ = "Mathieu Fenniak"
-__author_email__ = "biziqe@mathieu.fenniak.net"
+from generic import RectangleObject, IndirectObject, NameObject
 
 
-from reader import PdfFileReader
-from writer import PdfFileWriter
-from merger import PdfFileMerger
+def getRectangle(self, name, defaults):
+    retval = self.get(name)
+    if isinstance(retval, RectangleObject):
+        return retval
+    if retval is None:
+        for d in defaults:
+            retval = self.get(d)
+            if retval is not None:
+                break
+    if isinstance(retval, IndirectObject):
+        retval = self.pdf.getObject(retval)
+    retval = RectangleObject(retval)
+    setRectangle(self, name, retval)
+    return retval
 
-from _version import __version__
 
-__all__ = ["PdfFileReader", "PdfFileWriter", "PdfFileMerger", "__version__"]
+def setRectangle(self, name, value):
+    if not isinstance(name, NameObject):
+        name = NameObject(name)
+    self[name] = value
+
+
+def deleteRectangle(self, name):
+    del self[name]
+
+
+def createRectangleAccessor(name, fallback):
+    return property(
+        lambda self: getRectangle(self, name, fallback),
+        lambda self, value: setRectangle(self, name, value),
+        lambda self: deleteRectangle(self, name))

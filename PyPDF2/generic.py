@@ -1,6 +1,8 @@
-# vim: sw=4:expandtab:foldmethod=marker
+# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2006, Mathieu Fenniak
+# Copyright (c) 2013, Jean Schurger <jean@schurger.org>
+#
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -27,7 +29,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-
 """
 Implementation of generic PDF objects (dictionary, number, string, and so on)
 """
@@ -41,11 +42,11 @@ import filters
 import utils
 import decimal
 import codecs
-#import debugging
+
 
 def readObject(stream, pdf):
     tok = stream.read(1)
-    stream.seek(-1, 1) # reset to start
+    stream.seek(-1, 1)  # reset to start
     if tok == b_('t') or tok == b_('f'):
         # boolean object
         return BooleanObject.readFromStream(stream)
@@ -64,7 +65,7 @@ def readObject(stream, pdf):
     elif tok == b_('<'):
         # hexadecimal string OR dictionary
         peek = stream.read(2)
-        stream.seek(-2, 1) # reset to start
+        stream.seek(-2, 1)  # reset to start
         if peek == b_('<<'):
             return DictionaryObject.readFromStream(stream, pdf)
         else:
@@ -82,11 +83,12 @@ def readObject(stream, pdf):
             # number
             return NumberObject.readFromStream(stream)
         peek = stream.read(20)
-        stream.seek(-len(peek), 1) # reset to start
-        if re.match(b_(r"(\d+)\s(\d+)\sR[^a-zA-Z]"), peek) != None:
+        stream.seek(-len(peek), 1)  # reset to start
+        if re.match(b_(r"(\d+)\s(\d+)\sR[^a-zA-Z]"), peek) is not None:
             return IndirectObject.readFromStream(stream, pdf)
         else:
             return NumberObject.readFromStream(stream)
+
 
 class PdfObject(object):
     def getObject(self):
@@ -170,13 +172,11 @@ class IndirectObject(PdfObject):
         return "IndirectObject(%r, %r)" % (self.idnum, self.generation)
 
     def __eq__(self, other):
-        return (
-            other != None and
-            isinstance(other, IndirectObject) and
-            self.idnum == other.idnum and
-            self.generation == other.generation and
-            self.pdf is other.pdf
-            )
+        return (other is not None and
+                isinstance(other, IndirectObject) and
+                self.idnum == other.idnum and
+                self.generation == other.generation and
+                self.pdf is other.pdf)
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -199,7 +199,9 @@ class IndirectObject(PdfObject):
             generation += tok
         r = stream.read(1)
         if r != b_("R"):
-            raise utils.PdfReadError("Error reading indirect object reference at byte %s" % utils.hexStr(stream.tell()))
+            raise utils.PdfReadError(
+                "Error reading indirect object reference at byte %s" %
+                utils.hexStr(stream.tell()))
         return IndirectObject(int(idnum), int(generation), pdf)
     readFromStream = staticmethod(readFromStream)
 
@@ -207,16 +209,17 @@ class IndirectObject(PdfObject):
 class FloatObject(decimal.Decimal, PdfObject):
     def __new__(cls, value="0", context=None):
         return decimal.Decimal.__new__(cls, utils.str_(value), context)
+
     def __repr__(self):
         if self == self.to_integral():
             return str(self.quantize(decimal.Decimal(1)))
         else:
             # XXX: this adds useless extraneous zeros.
             return "%.5f" % self
-            
+
     def as_numeric(self):
         return float(b_(repr(self)))
-        
+
     def writeToStream(self, stream, encryption_key):
         stream.write(b_(repr(self)))
 
@@ -224,7 +227,7 @@ class FloatObject(decimal.Decimal, PdfObject):
 class NumberObject(int, PdfObject):
     def __init__(self, value):
         int.__init__(value)
-        
+
     def as_numeric(self):
         return int(b_(repr(self)))
 
@@ -235,7 +238,8 @@ class NumberObject(int, PdfObject):
         name = b_("")
         while True:
             tok = stream.read(1)
-            if tok != b_('+') and tok != b_('-') and tok != b_('.') and not tok.isdigit():
+            if tok != b_('+') and tok != b_('-') \
+                    and tok != b_('.') and not tok.isdigit():
                 stream.seek(-1, 1)
                 break
             name += tok
@@ -423,7 +427,8 @@ class TextStringObject(utils.string_type, PdfObject):
 
 
 class NameObject(str, PdfObject):
-    delimiterCharacters = b_("("), b_(")"), b_("<"), b_(">"), b_("["), b_("]"), b_("{"), b_("}"), b_("/"), b_("%")
+    delimiterCharacters = b_("("), b_(")"), b_("<"), b_(">"), b_("["), \
+        b_("]"), b_("{"), b_("}"), b_("/"), b_("%")
 
     def __init__(self, data):
         str.__init__(data)
@@ -432,8 +437,6 @@ class NameObject(str, PdfObject):
         stream.write(b_(self))
 
     def readFromStream(stream):
-        debug = False
-        if debug: print stream.tell()
         name = stream.read(1)
         if name != b_("/"):
             raise utils.PdfReadError, "name read error"
@@ -443,7 +446,6 @@ class NameObject(str, PdfObject):
                 stream.seek(-1, 1)
                 break
             name += tok
-        if debug: print name
         return NameObject(name.decode('utf-8'))
     readFromStream = staticmethod(readFromStream)
 
@@ -501,7 +503,7 @@ class DictionaryObject(dict, PdfObject):
     # return None if no metadata was found on the document root.
     def getXmpMetadata(self):
         metadata = self.get("/Metadata", None)
-        if metadata == None:
+        if metadata is None:
             return None
         metadata = metadata.getObject()
         import xmp
@@ -527,15 +529,18 @@ class DictionaryObject(dict, PdfObject):
         stream.write(b_(">>"))
 
     def readFromStream(stream, pdf):
-        debug = False
         tmp = stream.read(2)
         if tmp != b_("<<"):
-            raise utils.PdfReadError, \
-                ("Dictionary read error at byte %s: stream must begin with '<<'" % utils.hexStr(stream.tell()))
+            raise utils.PdfReadError(
+                ("Dictionary read error at byte %s: "
+                 "stream must begin with '<<'" %
+                    utils.hexStr(stream.tell())))
         data = {}
         while True:
             tok = readNonWhitespace(stream)
-            if debug: print "Tok:",tok
+            if not tok:
+                # stream has truncated prematurely
+                raise utils.PdfStreamError("Stream has ended unexpectedly")
             if tok == b_(">"):
                 stream.read(1)
                 break
@@ -544,35 +549,35 @@ class DictionaryObject(dict, PdfObject):
             tok = readNonWhitespace(stream)
             stream.seek(-1, 1)
             value = readObject(stream, pdf)
-            if data.has_key(key):
+            if key in data:
                 # multiple definitions of key not permitted
-                raise utils.PdfReadError, ("Multiple definitions in dictionary at byte %s for key %s" \
-                                           % (utils.hexStr(stream.tell()), key))
+                raise utils.PdfReadError, ("Multiple definitions in "
+                                           "dictionary at byte %s for key %s"
+                                           % (utils.hexStr(stream.tell()),
+                                              key))
             data[key] = value
         pos = stream.tell()
         s = readNonWhitespace(stream)
         if s == b_('s') and stream.read(5) == b_('tream'):
             eol = stream.read(1)
-            # odd PDF file output has spaces after 'stream' keyword but before EOL.
+            # odd PDF file output has spaces after 'stream'
+            # keyword but before EOL.
             # patch provided by Danial Sandler
             while eol == b_(' '):
                 eol = stream.read(1)
             assert eol in (b_("\n"), b_("\r"))
             if eol == b_("\r"):
                 # read \n after
-                if stream.read(1)  != '\n':
+                if stream.read(1) != '\n':
                     stream.seek(-1, 1)
             # this is a stream object, not a dictionary
-            assert data.has_key("/Length")
+            assert "/Length" in data
             length = data["/Length"]
-            if debug: print data
             if isinstance(length, IndirectObject):
                 t = stream.tell()
                 length = pdf.getObject(length)
                 stream.seek(t, 0)
             data["__streamdata__"] = stream.read(length)
-            if debug: print "here"
-            #if debug: print debugging.printAsHex(data["__streamdata__"])
             e = readNonWhitespace(stream)
             ndstream = stream.read(8)
             if (e + ndstream) != b_("endstream"):
@@ -589,13 +594,13 @@ class DictionaryObject(dict, PdfObject):
                     # we found it by looking back one character further.
                     data["__streamdata__"] = data["__streamdata__"][:-1]
                 else:
-                   # if debug: print "E", e, ndstream, debugging.toHex(end)
                     stream.seek(pos, 0)
                     raise utils.PdfReadError, \
-                        ("Unable to find 'endstream' marker after stream at byte %s." % utils.hexStr(stream.tell()))
+                        ("Unable to find 'endstream' marker after "
+                         "stream at byte %s." % utils.hexStr(stream.tell()))
         else:
             stream.seek(pos, 0)
-        if data.has_key("__streamdata__"):
+        if "__streamdata__" in data:
             return StreamObject.initializeFromDictionary(data)
         else:
             retval = DictionaryObject()
@@ -603,33 +608,34 @@ class DictionaryObject(dict, PdfObject):
             return retval
     readFromStream = staticmethod(readFromStream)
 
+
 class TreeObject(DictionaryObject):
     def __init__(self):
         DictionaryObject.__init__(self)
-        
+
     def hasChildren(self):
-        return self.has_key('/First')
-    
+        return '/First' in self
+
     def __iter__(self):
         return self.children()
-        
+
     def children(self):
         if not self.hasChildren():
             raise StopIteration
-            
+
         child = self['/First']
         while True:
             yield child
             if child == self['/Last']:
                 raise StopIteration
             child = child['/Next']
-        
+
     def addChild(self, child, pdf):
         childObj = child.getObject()
         child = pdf.getReference(childObj)
         assert isinstance(child, IndirectObject)
-        
-        if not self.has_key('/First'):
+
+        if '/First' not in self:
             self[NameObject('/First')] = child
             self[NameObject('/Count')] = NumberObject(0)
             prev = None
@@ -637,7 +643,8 @@ class TreeObject(DictionaryObject):
             prev = self['/Last']
 
         self[NameObject('/Last')] = child
-        self[NameObject('/Count')] = NumberObject(self[NameObject('/Count')] + 1)
+        self[NameObject('/Count')] = NumberObject(
+            self[NameObject('/Count')] + 1)
 
         if prev:
             prevRef = pdf.getReference(prev)
@@ -648,90 +655,87 @@ class TreeObject(DictionaryObject):
         parentRef = pdf.getReference(self)
         assert isinstance(parentRef, IndirectObject)
         childObj[NameObject('/Parent')] = parentRef
-        
+
     def removeChild(self, child):
         childObj = child.getObject()
-        
-        if not childObj.has_key(NameObject('/Parent')):
-            raise ValueError, "Removed child does not appear to be a tree item"
+
+        if NameObject('/Parent') not in childObj:
+            raise ValueError("Removed child does not appear to be a tree item")
         elif childObj[NameObject('/Parent')] != self:
-            raise ValueError, "Removed child is not a member of this tree"
-        
+            raise ValueError("Removed child is not a member of this tree")
+
         found = False
         prevRef = None
         prev = None
         curRef = self[NameObject('/First')]
         cur = curRef.getObject()
         lastRef = self[NameObject('/Last')]
-        last = lastRef.getObject() 
-        while cur != None:
+        last = lastRef.getObject()
+        while cur is not None:
             if cur == childObj:
-                if prev == None:
-                    if cur.has_key(NameObject('/Next')):
+                if prev is None:
+                    if NameObject('/Next') in cur:
                         # Removing first tree node
                         nextRef = cur[NameObject('/Next')]
                         next = nextRef.getObject()
                         del next[NameObject('/Prev')]
                         self[NameObject('/First')] = nextRef
-                        self[NameObject('/Count')] = self[NameObject('/Count')] - 1
-                        
+                        self[NameObject('/Count')] = self[NameObject(
+                            '/Count')] - 1
                     else:
                         # Removing only tree node
                         assert self[NameObject('/Count')] == 1
                         del self[NameObject('/Count')]
                         del self[NameObject('/First')]
-                        if self.has_key(NameObject('/Last')):
+                        if NameObject('/Last') in self:
                             del self[NameObject('/Last')]
                 else:
-                    if cur.has_key(NameObject('/Next')):
+                    if NameObject('/Next') in cur:
                         # Removing middle tree node
                         nextRef = cur[NameObject('/Next')]
                         next = nextRef.getObject()
                         next[NameObject('/Prev')] = prevRef
                         prev[NameObject('/Next')] = nextRef
-                        self[NameObject('/Count')] = self[NameObject('/Count')] - 1
+                        self[NameObject('/Count')] = self[NameObject(
+                            '/Count')] - 1
                     else:
                         # Removing last tree node
                         assert cur == last
                         del prev[NameObject('/Next')]
                         self[NameObject('/Last')] = prevRef
-                        self[NameObject('/Count')] = self[NameObject('/Count')] - 1
+                        self[NameObject('/Count')] = self[
+                            NameObject('/Count')] - 1
                 found = True
-                break        
-                    
-            
+                break
             prevRef = curRef
             prev = cur
-            if cur.has_key(NameObject('/Next')):
+            if NameObject('/Next') in cur:
                 curRef = cur[NameObject('/Next')]
                 cur = curRef.getObject()
             else:
                 curRef = None
                 cur = None
-       
         if not found:
-            raise ValueError, "Removal couldn't find item in tree"
-       
+            raise ValueError("Removal couldn't find item in tree")
         del childObj[NameObject('/Parent')]
-        if childObj.has_key(NameObject('/Next')):
+        if NameObject('/Next')in childObj:
             del childObj[NameObject('/Next')]
-        if childObj.has_key(NameObject('/Prev')):
+        if NameObject('/Prev') in childObj:
             del childObj[NameObject('/Prev')]
 
     def emptyTree(self):
         for child in self:
             childObj = child.getObject()
             del childObj[NameObject('/Parent')]
-            if childObj.has_key(NameObject('/Next')):
+            if NameObject('/Next') in childObj:
                 del childObj[NameObject('/Next')]
-            if childObj.has_key(NameObject('/Prev')):
+            if NameObject('/Prev') in childObj:
                 del childObj[NameObject('/Prev')]
-
-        if self.has_key(NameObject('/Count')):
+        if NameObject('/Count') in self:
             del self[NameObject('/Count')]
-        if self.has_key(NameObject('/First')):
+        if NameObject('/First') in self:
             del self[NameObject('/First')]
-        if self.has_key(NameObject('/Last')):
+        if NameObject('/Last') in self:
             del self[NameObject('/Last')]
 
 
@@ -752,7 +756,7 @@ class StreamObject(DictionaryObject):
         stream.write(b_("\nendstream"))
 
     def initializeFromDictionary(data):
-        if data.has_key("/Filter"):
+        if "/Filter" in data:
             retval = EncodedStreamObject()
         else:
             retval = DecodedStreamObject()
@@ -764,7 +768,7 @@ class StreamObject(DictionaryObject):
     initializeFromDictionary = staticmethod(initializeFromDictionary)
 
     def flateEncode(self):
-        if self.has_key("/Filter"):
+        if "/Filter" in self:
             f = self["/Filter"]
             if isinstance(f, ArrayObject):
                 f.insert(0, NameObject("/FlateDecode"))
@@ -808,7 +812,8 @@ class EncodedStreamObject(StreamObject):
             return decoded._data
 
     def setData(self, data):
-        raise utils.PdfReadError, "Creating EncodedStreamObject is not currently supported"
+        raise utils.PdfReadError("Creating EncodedStreamObject is "
+                                 "not currently supported")
 
 
 class RectangleObject(ArrayObject):
@@ -840,7 +845,7 @@ class RectangleObject(ArrayObject):
 
     def getUpperLeft_x(self):
         return self.getLowerLeft_x()
-    
+
     def getUpperLeft_y(self):
         return self.getUpperRight_y()
 
@@ -885,6 +890,7 @@ class RectangleObject(ArrayObject):
     upperLeft = property(getUpperLeft, setUpperLeft, None, None)
     upperRight = property(getUpperRight, setUpperRight, None, None)
 
+
 ##
 # A class representing a destination within a PDF file.
 # See section 8.2.1 of the PDF 1.6 reference.
@@ -895,7 +901,7 @@ class Destination(TreeObject):
         self[NameObject("/Title")] = title
         self[NameObject("/Page")] = page
         self[NameObject("/Type")] = typ
-        
+
         # from table 8.2 of the PDF 1.6 reference.
         if typ == "/XYZ":
             (self[NameObject("/Left")], self[NameObject("/Top")],
@@ -911,13 +917,16 @@ class Destination(TreeObject):
             pass
         else:
             raise utils.PdfReadError("Unknown Destination Type: %r" % typ)
-            
+
     def getDestArray(self):
-        return ArrayObject([self.raw_get('/Page'), self['/Type']] + [self[x] for x in ['/Left','/Bottom','/Right','/Top','/Zoom'] if self.has_key(x)])
-        
+        return ArrayObject(
+            [self.raw_get('/Page'), self['/Type']]
+            + [self[x] for x in ['/Left', '/Bottom', '/Right', '/Top', '/Zoom']
+               if x in self])
+
     def writeToStream(self, stream, encryption_key):
         stream.write(b_("<<\n"))
-        
+
         key = NameObject('/D')
         key.writeToStream(stream, encryption_key)
         stream.write(b_(" "))
@@ -929,10 +938,10 @@ class Destination(TreeObject):
         stream.write(b_(" "))
         value = NameObject("/GoTo")
         value.writeToStream(stream, encryption_key)
-        
+
         stream.write(b_("\n"))
         stream.write(b_(">>"))
-         
+
     ##
     # Read-only property accessing the destination title.
     # @return A string.
@@ -972,12 +981,14 @@ class Destination(TreeObject):
     # Read-only property accessing the bottom vertical coordinate.
     # @return A number, or None if not available.
     bottom = property(lambda self: self.get("/Bottom", None))
-        
+
 
 class Bookmark(Destination):
     def writeToStream(self, stream, encryption_key):
         stream.write(b_("<<\n"))
-        for key in [NameObject(x) for x in ['/Title', '/Parent', '/First', '/Last', '/Next', '/Prev'] if self.has_key(x)]:
+        for key in [NameObject(x) for x in
+                    ['/Title', '/Parent', '/First', '/Last', '/Next', '/Prev']
+                    if x in self]:
             key.writeToStream(stream, encryption_key)
             stream.write(b_(" "))
             value = self.raw_get(key)
@@ -990,8 +1001,8 @@ class Bookmark(Destination):
         value.writeToStream(stream, encryption_key)
         stream.write(b_("\n"))
         stream.write(b_(">>"))
-        
- 
+
+
 def encode_pdfdocencoding(unicode_string):
     retval = b_('')
     for c in unicode_string:
@@ -999,8 +1010,9 @@ def encode_pdfdocencoding(unicode_string):
             retval += b_(chr(_pdfDocEncoding_rev[c]))
         except KeyError:
             raise UnicodeEncodeError("pdfdocencoding", c, -1, -1,
-                    "does not exist in translation table")
+                                     "does not exist in translation table")
     return retval
+
 
 def decode_pdfdocencoding(byte_array):
     retval = u_('')
@@ -1008,44 +1020,75 @@ def decode_pdfdocencoding(byte_array):
         c = _pdfDocEncoding[ord_(b)]
         if c == u_('\u0000'):
             raise UnicodeDecodeError("pdfdocencoding", utils.barray(b), -1, -1,
-                    "does not exist in translation table")
+                                     "does not exist in translation table")
         retval += c
     return retval
 
 _pdfDocEncoding = (
-  u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
-  u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
-  u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
-  u_('\u02d8'), u_('\u02c7'), u_('\u02c6'), u_('\u02d9'), u_('\u02dd'), u_('\u02db'), u_('\u02da'), u_('\u02dc'),
-  u_('\u0020'), u_('\u0021'), u_('\u0022'), u_('\u0023'), u_('\u0024'), u_('\u0025'), u_('\u0026'), u_('\u0027'),
-  u_('\u0028'), u_('\u0029'), u_('\u002a'), u_('\u002b'), u_('\u002c'), u_('\u002d'), u_('\u002e'), u_('\u002f'),
-  u_('\u0030'), u_('\u0031'), u_('\u0032'), u_('\u0033'), u_('\u0034'), u_('\u0035'), u_('\u0036'), u_('\u0037'),
-  u_('\u0038'), u_('\u0039'), u_('\u003a'), u_('\u003b'), u_('\u003c'), u_('\u003d'), u_('\u003e'), u_('\u003f'),
-  u_('\u0040'), u_('\u0041'), u_('\u0042'), u_('\u0043'), u_('\u0044'), u_('\u0045'), u_('\u0046'), u_('\u0047'),
-  u_('\u0048'), u_('\u0049'), u_('\u004a'), u_('\u004b'), u_('\u004c'), u_('\u004d'), u_('\u004e'), u_('\u004f'),
-  u_('\u0050'), u_('\u0051'), u_('\u0052'), u_('\u0053'), u_('\u0054'), u_('\u0055'), u_('\u0056'), u_('\u0057'),
-  u_('\u0058'), u_('\u0059'), u_('\u005a'), u_('\u005b'), u_('\u005c'), u_('\u005d'), u_('\u005e'), u_('\u005f'),
-  u_('\u0060'), u_('\u0061'), u_('\u0062'), u_('\u0063'), u_('\u0064'), u_('\u0065'), u_('\u0066'), u_('\u0067'),
-  u_('\u0068'), u_('\u0069'), u_('\u006a'), u_('\u006b'), u_('\u006c'), u_('\u006d'), u_('\u006e'), u_('\u006f'),
-  u_('\u0070'), u_('\u0071'), u_('\u0072'), u_('\u0073'), u_('\u0074'), u_('\u0075'), u_('\u0076'), u_('\u0077'),
-  u_('\u0078'), u_('\u0079'), u_('\u007a'), u_('\u007b'), u_('\u007c'), u_('\u007d'), u_('\u007e'), u_('\u0000'),
-  u_('\u2022'), u_('\u2020'), u_('\u2021'), u_('\u2026'), u_('\u2014'), u_('\u2013'), u_('\u0192'), u_('\u2044'),
-  u_('\u2039'), u_('\u203a'), u_('\u2212'), u_('\u2030'), u_('\u201e'), u_('\u201c'), u_('\u201d'), u_('\u2018'),
-  u_('\u2019'), u_('\u201a'), u_('\u2122'), u_('\ufb01'), u_('\ufb02'), u_('\u0141'), u_('\u0152'), u_('\u0160'),
-  u_('\u0178'), u_('\u017d'), u_('\u0131'), u_('\u0142'), u_('\u0153'), u_('\u0161'), u_('\u017e'), u_('\u0000'),
-  u_('\u20ac'), u_('\u00a1'), u_('\u00a2'), u_('\u00a3'), u_('\u00a4'), u_('\u00a5'), u_('\u00a6'), u_('\u00a7'),
-  u_('\u00a8'), u_('\u00a9'), u_('\u00aa'), u_('\u00ab'), u_('\u00ac'), u_('\u0000'), u_('\u00ae'), u_('\u00af'),
-  u_('\u00b0'), u_('\u00b1'), u_('\u00b2'), u_('\u00b3'), u_('\u00b4'), u_('\u00b5'), u_('\u00b6'), u_('\u00b7'),
-  u_('\u00b8'), u_('\u00b9'), u_('\u00ba'), u_('\u00bb'), u_('\u00bc'), u_('\u00bd'), u_('\u00be'), u_('\u00bf'),
-  u_('\u00c0'), u_('\u00c1'), u_('\u00c2'), u_('\u00c3'), u_('\u00c4'), u_('\u00c5'), u_('\u00c6'), u_('\u00c7'),
-  u_('\u00c8'), u_('\u00c9'), u_('\u00ca'), u_('\u00cb'), u_('\u00cc'), u_('\u00cd'), u_('\u00ce'), u_('\u00cf'),
-  u_('\u00d0'), u_('\u00d1'), u_('\u00d2'), u_('\u00d3'), u_('\u00d4'), u_('\u00d5'), u_('\u00d6'), u_('\u00d7'),
-  u_('\u00d8'), u_('\u00d9'), u_('\u00da'), u_('\u00db'), u_('\u00dc'), u_('\u00dd'), u_('\u00de'), u_('\u00df'),
-  u_('\u00e0'), u_('\u00e1'), u_('\u00e2'), u_('\u00e3'), u_('\u00e4'), u_('\u00e5'), u_('\u00e6'), u_('\u00e7'),
-  u_('\u00e8'), u_('\u00e9'), u_('\u00ea'), u_('\u00eb'), u_('\u00ec'), u_('\u00ed'), u_('\u00ee'), u_('\u00ef'),
-  u_('\u00f0'), u_('\u00f1'), u_('\u00f2'), u_('\u00f3'), u_('\u00f4'), u_('\u00f5'), u_('\u00f6'), u_('\u00f7'),
-  u_('\u00f8'), u_('\u00f9'), u_('\u00fa'), u_('\u00fb'), u_('\u00fc'), u_('\u00fd'), u_('\u00fe'), u_('\u00ff')
-)
+    u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
+    u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
+    u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
+    u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
+    u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
+    u_('\u0000'), u_('\u0000'), u_('\u0000'), u_('\u0000'),
+    u_('\u02d8'), u_('\u02c7'), u_('\u02c6'), u_('\u02d9'),
+    u_('\u02dd'), u_('\u02db'), u_('\u02da'), u_('\u02dc'),
+    u_('\u0020'), u_('\u0021'), u_('\u0022'), u_('\u0023'),
+    u_('\u0024'), u_('\u0025'), u_('\u0026'), u_('\u0027'),
+    u_('\u0028'), u_('\u0029'), u_('\u002a'), u_('\u002b'),
+    u_('\u002c'), u_('\u002d'), u_('\u002e'), u_('\u002f'),
+    u_('\u0030'), u_('\u0031'), u_('\u0032'), u_('\u0033'),
+    u_('\u0034'), u_('\u0035'), u_('\u0036'), u_('\u0037'),
+    u_('\u0038'), u_('\u0039'), u_('\u003a'), u_('\u003b'),
+    u_('\u003c'), u_('\u003d'), u_('\u003e'), u_('\u003f'),
+    u_('\u0040'), u_('\u0041'), u_('\u0042'), u_('\u0043'),
+    u_('\u0044'), u_('\u0045'), u_('\u0046'), u_('\u0047'),
+    u_('\u0048'), u_('\u0049'), u_('\u004a'), u_('\u004b'),
+    u_('\u004c'), u_('\u004d'), u_('\u004e'), u_('\u004f'),
+    u_('\u0050'), u_('\u0051'), u_('\u0052'), u_('\u0053'),
+    u_('\u0054'), u_('\u0055'), u_('\u0056'), u_('\u0057'),
+    u_('\u0058'), u_('\u0059'), u_('\u005a'), u_('\u005b'),
+    u_('\u005c'), u_('\u005d'), u_('\u005e'), u_('\u005f'),
+    u_('\u0060'), u_('\u0061'), u_('\u0062'), u_('\u0063'),
+    u_('\u0064'), u_('\u0065'), u_('\u0066'), u_('\u0067'),
+    u_('\u0068'), u_('\u0069'), u_('\u006a'), u_('\u006b'),
+    u_('\u006c'), u_('\u006d'), u_('\u006e'), u_('\u006f'),
+    u_('\u0070'), u_('\u0071'), u_('\u0072'), u_('\u0073'),
+    u_('\u0074'), u_('\u0075'), u_('\u0076'), u_('\u0077'),
+    u_('\u0078'), u_('\u0079'), u_('\u007a'), u_('\u007b'),
+    u_('\u007c'), u_('\u007d'), u_('\u007e'), u_('\u0000'),
+    u_('\u2022'), u_('\u2020'), u_('\u2021'), u_('\u2026'),
+    u_('\u2014'), u_('\u2013'), u_('\u0192'), u_('\u2044'),
+    u_('\u2039'), u_('\u203a'), u_('\u2212'), u_('\u2030'),
+    u_('\u201e'), u_('\u201c'), u_('\u201d'), u_('\u2018'),
+    u_('\u2019'), u_('\u201a'), u_('\u2122'), u_('\ufb01'),
+    u_('\ufb02'), u_('\u0141'), u_('\u0152'), u_('\u0160'),
+    u_('\u0178'), u_('\u017d'), u_('\u0131'), u_('\u0142'),
+    u_('\u0153'), u_('\u0161'), u_('\u017e'), u_('\u0000'),
+    u_('\u20ac'), u_('\u00a1'), u_('\u00a2'), u_('\u00a3'),
+    u_('\u00a4'), u_('\u00a5'), u_('\u00a6'), u_('\u00a7'),
+    u_('\u00a8'), u_('\u00a9'), u_('\u00aa'), u_('\u00ab'),
+    u_('\u00ac'), u_('\u0000'), u_('\u00ae'), u_('\u00af'),
+    u_('\u00b0'), u_('\u00b1'), u_('\u00b2'), u_('\u00b3'),
+    u_('\u00b4'), u_('\u00b5'), u_('\u00b6'), u_('\u00b7'),
+    u_('\u00b8'), u_('\u00b9'), u_('\u00ba'), u_('\u00bb'),
+    u_('\u00bc'), u_('\u00bd'), u_('\u00be'), u_('\u00bf'),
+    u_('\u00c0'), u_('\u00c1'), u_('\u00c2'), u_('\u00c3'),
+    u_('\u00c4'), u_('\u00c5'), u_('\u00c6'), u_('\u00c7'),
+    u_('\u00c8'), u_('\u00c9'), u_('\u00ca'), u_('\u00cb'),
+    u_('\u00cc'), u_('\u00cd'), u_('\u00ce'), u_('\u00cf'),
+    u_('\u00d0'), u_('\u00d1'), u_('\u00d2'), u_('\u00d3'),
+    u_('\u00d4'), u_('\u00d5'), u_('\u00d6'), u_('\u00d7'),
+    u_('\u00d8'), u_('\u00d9'), u_('\u00da'), u_('\u00db'),
+    u_('\u00dc'), u_('\u00dd'), u_('\u00de'), u_('\u00df'),
+    u_('\u00e0'), u_('\u00e1'), u_('\u00e2'), u_('\u00e3'),
+    u_('\u00e4'), u_('\u00e5'), u_('\u00e6'), u_('\u00e7'),
+    u_('\u00e8'), u_('\u00e9'), u_('\u00ea'), u_('\u00eb'),
+    u_('\u00ec'), u_('\u00ed'), u_('\u00ee'), u_('\u00ef'),
+    u_('\u00f0'), u_('\u00f1'), u_('\u00f2'), u_('\u00f3'),
+    u_('\u00f4'), u_('\u00f5'), u_('\u00f6'), u_('\u00f7'),
+    u_('\u00f8'), u_('\u00f9'), u_('\u00fa'), u_('\u00fb'),
+    u_('\u00fc'), u_('\u00fd'), u_('\u00fe'), u_('\u00ff'))
 
 assert len(_pdfDocEncoding) == 256
 
@@ -1056,4 +1099,3 @@ for i in xrange(256):
         continue
     assert char not in _pdfDocEncoding_rev
     _pdfDocEncoding_rev[char] = i
-
