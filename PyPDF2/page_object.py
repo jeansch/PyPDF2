@@ -125,6 +125,7 @@ class ContentStream(DecodedStreamObject):
                     data += tok
             else:
                 data += tok
+        readNonWhitespace(stream)
         stream.seek(-1, 1)
         return {"settings": settings, "data": data}
 
